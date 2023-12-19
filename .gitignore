@@ -1032,3 +1032,5 @@ $RECYCLE.BIN/
 # Sensitive data
 appsettings.json
 appsettings.Development.json
+
+Migrations/
