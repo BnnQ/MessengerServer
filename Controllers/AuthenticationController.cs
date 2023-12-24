@@ -5,8 +5,11 @@ using AutoMapper;
 using MessengerServer.Configuration;
 using MessengerServer.Entities;
 using MessengerServer.Extensions;
+using MessengerServer.Models;
 using MessengerServer.Models.Dto.Authentication;
 using MessengerServer.Models.Dto.User;
+using MessengerServer.Models.Enums;
+using MessengerServer.Services.Abstractions;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
@@ -19,6 +22,7 @@ namespace MessengerServer.Controllers;
 [ApiController]
 public class AuthenticationController : ControllerBase
 {
+    private readonly IClientUpdateSender clientUpdateSender;
     private readonly Jwt jwtOptions;
     private readonly ILogger<AuthenticationController> logger;
     private readonly IMapper mapper;
@@ -28,7 +32,8 @@ public class AuthenticationController : ControllerBase
         UserManager<User> userManager,
         IOptions<Jwt> jwtOptions,
         ILoggerFactory loggerFactory,
-        IMapper mapper)
+        IMapper mapper,
+        IClientUpdateSender clientUpdateSender)
     {
         this.jwtOptions = jwtOptions.Value;
         this.jwtOptions.Validate();
@@ -36,6 +41,7 @@ public class AuthenticationController : ControllerBase
         this.userManager = userManager;
         logger = loggerFactory.CreateLogger<AuthenticationController>();
         this.mapper = mapper;
+        this.clientUpdateSender = clientUpdateSender;
     }
 
     [HttpPost(nameof(Register))]
@@ -51,11 +57,30 @@ public class AuthenticationController : ControllerBase
         {
             logger.LogActionInformation(HttpMethods.Post, nameof(Register),
                 "User registration successful for username: {username}", authenticationDto.UserName);
+
+            await clientUpdateSender.SendUpdateWithTokenAsync(authenticationDto.FcmToken,
+                new ClientUpdate<UserInfoDto>
+                {
+                    ActionId = HttpContext.GetActionIdentifier(),
+                    ActionType = ActionType.UserRegistered,
+                    ActionData =
+                        mapper.Map<UserInfoDto>(
+                            await userManager.FindByNameAsync(authenticationDto.UserName)),
+                    IsSuccess = true
+                });
             return Ok();
         }
 
         logger.LogActionWarning(HttpMethods.Post, nameof(Register),
             "User registration failed for username: {username}", authenticationDto.UserName);
+        await clientUpdateSender.SendUpdateWithTokenAsync(authenticationDto.FcmToken,
+            new ClientUpdate<UserInfoDto>
+            {
+                ActionId = HttpContext.GetActionIdentifier(),
+                ActionType = ActionType.UserRegistered,
+                ActionData = null,
+                IsSuccess = false
+            });
         return BadRequest(result.Errors);
     }
 
@@ -71,6 +96,16 @@ public class AuthenticationController : ControllerBase
         {
             logger.LogActionWarning(HttpMethods.Post, nameof(Login),
                 "Invalid login attempt for username: {username}", authenticationDto.UserName);
+
+            await clientUpdateSender.SendUpdateWithTokenAsync(authenticationDto.FcmToken,
+                new ClientUpdate<UserInfoDto>
+                {
+                    ActionId = HttpContext.GetActionIdentifier(),
+                    ActionType = ActionType.UserLoggedIn,
+                    ActionData = null,
+                    IsSuccess = false
+                });
+
             return BadRequest("Invalid login attempt");
         }
 
@@ -89,6 +124,16 @@ public class AuthenticationController : ControllerBase
 
         logger.LogActionInformation(HttpMethods.Post, nameof(Login),
             "User logged in successfully with username: {username}", authenticationDto.UserName);
+        await clientUpdateSender.SendUpdateWithTokenAsync(authenticationDto.FcmToken,
+            new ClientUpdate<dynamic>
+            {
+                ActionId = HttpContext.GetActionIdentifier(),
+                ActionType = ActionType.UserLoggedIn,
+                ActionData = new
+                    { Token = new JwtSecurityTokenHandler().WriteToken(token),
+                        CurrentUser = user },
+                IsSuccess = true
+            });
         return Ok(new { token = new JwtSecurityTokenHandler().WriteToken(token) });
     }
 
@@ -106,7 +151,14 @@ public class AuthenticationController : ControllerBase
                 "Returned user with username: {username}", user.UserName!);
 
             var userResponse = mapper.Map<UserInfoDto>(user);
-            return Ok(userResponse);
+            await clientUpdateSender.SendUpdateAsync(User.GetId(),
+                new ClientUpdate<UserInfoDto>
+                {
+                    ActionId = HttpContext.GetActionIdentifier(), ActionData = userResponse,
+                    ActionType = ActionType.UserUpdated, IsSuccess = true
+                });
+
+            return Ok();
         }
 
         logger.LogActionWarning(HttpMethods.Get, nameof(GetCurrentUser), "Failed to find user");
