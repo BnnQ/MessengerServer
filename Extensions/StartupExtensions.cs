@@ -1,9 +1,12 @@
 using System.Text;
 using System.Text.Json.Serialization;
 using Azure.Storage.Blobs;
+using FirebaseAdmin;
+using Google.Apis.Auth.OAuth2;
 using MessengerServer.Configuration;
 using MessengerServer.Contexts;
 using MessengerServer.Entities;
+using MessengerServer.Middlewares;
 using MessengerServer.Services;
 using MessengerServer.Services.Abstractions;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -20,7 +23,10 @@ public static class StartupExtensions
 {
     public static WebApplicationBuilder ConfigureServices(this WebApplicationBuilder builder)
     {
-        builder.Services.AddControllers(options => options.AllowEmptyInputInBodyModelBinding = true)
+        builder.Services.AddControllers(options =>
+            {
+                options.AllowEmptyInputInBodyModelBinding = true;
+            })
             .AddJsonOptions(
                 options =>
                 {
@@ -131,9 +137,28 @@ public static class StartupExtensions
 
         #endregion
 
+        #region Firebase
+
+        builder.Services.AddSingleton<FirebaseApp>(_ =>
+        {
+            var firebaseApp = FirebaseApp.Create(new AppOptions
+            {
+                Credential = GoogleCredential.FromFile("firebase.key.json")
+            });
+
+            return firebaseApp;
+        });
+
+        builder.Services.AddScoped<IClientUpdateSender, FirebaseClientUpdateSender>();
+
+        #endregion
+
         #region Custom services
 
-        //TODO
+        builder.Services.AddTransient<ClientCommunicationProcessingMiddleware>();
+
+        builder.Services.AddTransient<IChatRepository, DatabaseChatRepository>();
+        builder.Services.AddTransient<IMessageRepository, DatabaseMessageRepository>();
 
         #endregion
 
@@ -162,10 +187,15 @@ public static class StartupExtensions
         app.UseAuthentication();
         app.UseAuthorization();
 
+        #region Custom middlewares
+
+        app.UseMiddleware<ClientCommunicationProcessingMiddleware>();
+
+        #endregion
+
         app.MapControllerRoute(
             "default",
             "api/{controller=Home}/{action=Index}/{id?}");
-
 
         app.MapFallbackToFile("index.html");
 
