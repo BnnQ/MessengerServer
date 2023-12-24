@@ -1,6 +1,7 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Blobs.Models;
 using MessengerServer.Services.Abstractions;
+using Environment = MessengerServer.Configuration.Environment;
 
 namespace MessengerServer.Services;
 
@@ -29,8 +30,9 @@ public class AzureFormFileManager : IFormFileManager
         await using var fileStream = file.OpenReadStream();
         await blobClient.UploadAsync(fileStream);
         fileStream.Close();
-
-        return blobClient.Uri;
+        
+        var newUri = new Uri(Environment.AzuriteHostAddress + blobClient.Uri.AbsolutePath);
+        return newUri;
     }
 
     public async Task DeleteFileAsync(string fileName)
