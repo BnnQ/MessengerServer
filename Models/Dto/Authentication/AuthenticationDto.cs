@@ -4,4 +4,5 @@ public class AuthenticationDto
 {
     public string UserName { get; set; } = default!;
     public string Password { get; set; } = default!;
+    public string FcmToken { get; set; } = default!;
 }
