@@ -2,5 +2,6 @@ namespace MessengerServer.Configuration;
 
 public static class Environment
 {
-    public static string HostAddress { get; } = "http://localhost:5269";
+    public static string HostAddress { get; } = "https://randomly-merry-jawfish.ngrok-free.app";
+    public static string AzuriteHostAddress { get; } = "https://moved-upward-falcon.ngrok-free.app";
 }
