@@ -17,16 +17,23 @@ public class SqlServerDbContext(DbContextOptions<SqlServerDbContext> options)
 
         modelBuilder.Entity<User>(entity =>
         {
-            entity.Property(e => e.UserName)
+            entity.Property(user => user.UserName)
                 .HasMaxLength(128)
                 .IsUnicode()
                 .IsRequired();
-            entity.Property(e => e.AvatarImagePath)
+
+            entity.Property(user => user.AvatarImagePath)
                 .HasMaxLength(255)
                 .IsUnicode(false)
                 .IsRequired(false)
                 .HasDefaultValue($"{Environment.HostAddress}/user.png");
-            entity.HasIndex(e => e.UserName)
+
+            entity.Property(user => user.LastFcmToken)
+                .HasMaxLength(512)
+                .IsUnicode(false)
+                .IsRequired(false);
+
+            entity.HasIndex(user => user.UserName)
                 .IsUnique();
 
             entity.HasMany(user => user.Chats)
@@ -47,6 +54,8 @@ public class SqlServerDbContext(DbContextOptions<SqlServerDbContext> options)
                 .IsRequired()
                 .HasMaxLength(1024)
                 .IsUnicode();
+            entity.Property(message => message.SentAt)
+                .HasDefaultValue(DateTime.UtcNow);
             entity.HasOne(message => message.Sender)
                 .WithMany(sender => sender.Messages)
                 .HasForeignKey(e => e.SenderId)
