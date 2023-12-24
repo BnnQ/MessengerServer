@@ -1029,8 +1029,9 @@ $RECYCLE.BIN/
 
 # Android studio 3.1+ serialized cache file
 
+Migrations/
+
 # Sensitive data
 appsettings.json
 appsettings.Development.json
-
-Migrations/
+firebase.key.json
